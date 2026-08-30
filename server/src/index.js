@@ -1,3 +1,4 @@
+const path = require('path');
 const path = require("path");
 'use strict';
 
@@ -99,3 +100,21 @@ app.listen(config.port, () => {
     logger.info('SMTP not configured — transactional emails are printed to this console, and action links are returned by the API in development mode.');
   }
 });
+
+/* ===== PRODUCTION FRONTEND ===== */
+if (config.isProduction) {
+  const frontendPath = path.resolve(__dirname, '../../client/dist');
+
+  console.log('[frontend] Serving frontend from:', frontendPath);
+
+  app.use(express.static(frontendPath));
+
+  app.get('/', (req, res) => {
+    res.sendFile(path.join(frontendPath, 'index.html'));
+  });
+
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(frontendPath, 'index.html'));
+  });
+}
