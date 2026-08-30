@@ -92,10 +92,13 @@ function seedAdmin() {
 seedAdmin();
 
 
-app.listen(config.port, () => {
-  logger.info(`Security API listening on http://localhost:${config.port} (${config.env})`);
-  if (!config.smtp.host) {
-    logger.info('SMTP not configured — transactional emails are printed to this console, and action links are returned by the API in development mode.');
-  }
-});
+if (require.main === module) {
+  app.listen(config.port, () => {
+    logger.info("Security API listening on http://localhost:" + config.port + " (" + config.env + ")");
+    if (!config.smtp.host) {
+      logger.info("SMTP not configured — transactional emails are printed to this console.");
+    }
+  });
+}
 
+module.exports = app;
