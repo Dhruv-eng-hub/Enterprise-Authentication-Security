@@ -16,6 +16,7 @@
     "concurrently": "^9.1.0"
   },
   "dependencies": {
-    "@netlify/functions": "^6.0.0"
+    "@netlify/functions": "^6.0.0",
+    "serverless-http": "^4.0.0"
   }
 }
