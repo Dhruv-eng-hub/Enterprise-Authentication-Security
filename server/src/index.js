@@ -1,3 +1,4 @@
+const path = require("path");
 'use strict';
 
 /**
@@ -80,6 +81,17 @@ function seedAdmin() {
 }
 
 seedAdmin();
+
+
+// Serve React frontend in production
+if (config.isProduction) {
+  const clientDist = path.join(__dirname, "../../client/dist");
+  app.use(express.static(clientDist));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api")) return next();
+    res.sendFile(path.join(clientDist, "index.html"));
+  });
+}
 
 app.listen(config.port, () => {
   logger.info(`Security API listening on http://localhost:${config.port} (${config.env})`);
