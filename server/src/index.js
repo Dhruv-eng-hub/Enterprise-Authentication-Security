@@ -1,7 +1,5 @@
-const path = require('path');
 const path = require("path");
 'use strict';
-
 /**
  * Enterprise Authentication & Security — API server entry point.
  * Express + SQLite. All secrets come from server/.env.
@@ -53,6 +51,16 @@ app.use('/api/auth', authRoutes);
 app.use('/api/security', securityRoutes);
 app.use('/api/admin', adminRoutes);
 
+// Serve React frontend in production
+if (config.isProduction) {
+  const clientDist = path.resolve(__dirname, '../../client/dist');
+  app.use(express.static(clientDist));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
+
 app.use(notFound);
 app.use(errorHandler);
 
@@ -84,16 +92,6 @@ function seedAdmin() {
 seedAdmin();
 
 
-// Serve React frontend in production
-if (config.isProduction) {
-  const clientDist = path.join(__dirname, "../../client/dist");
-  app.use(express.static(clientDist));
-  app.get("*", (req, res, next) => {
-    if (req.path.startsWith("/api")) return next();
-    res.sendFile(path.join(clientDist, "index.html"));
-  });
-}
-
 app.listen(config.port, () => {
   logger.info(`Security API listening on http://localhost:${config.port} (${config.env})`);
   if (!config.smtp.host) {
@@ -101,20 +99,3 @@ app.listen(config.port, () => {
   }
 });
 
-/* ===== PRODUCTION FRONTEND ===== */
-if (config.isProduction) {
-  const frontendPath = path.resolve(__dirname, '../../client/dist');
-
-  console.log('[frontend] Serving frontend from:', frontendPath);
-
-  app.use(express.static(frontendPath));
-
-  app.get('/', (req, res) => {
-    res.sendFile(path.join(frontendPath, 'index.html'));
-  });
-
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api')) return next();
-    res.sendFile(path.join(frontendPath, 'index.html'));
-  });
-}

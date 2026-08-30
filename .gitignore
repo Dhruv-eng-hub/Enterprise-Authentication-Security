@@ -1,29 +1,6 @@
-# Dependencies
 node_modules/
-
-# Environment & secrets
-.env
-.env.local
-.env.*.local
-
-# Database files
-server/data/
-*.db
-*.db-journal
-*.db-wal
-*.db-shm
-
-# Build output
+client/node_modules/
+server/node_modules/
 client/dist/
-
-# Logs
-logs/
-*.log
-npm-debug.log*
-
-# OS / editor
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
-node_modules/
+server/.env
+server/data/
