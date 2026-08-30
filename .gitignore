@@ -6,3 +6,6 @@ server/.env
 server/data/
 
 .vercel
+
+# Local Netlify folder
+.netlify
