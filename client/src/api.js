@@ -1,91 +1,201 @@
-// API client — all requests go to the same origin (/api) through the Vite proxy
-// so HttpOnly session cookies work without CORS issues.
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  'https://enterprise-authentication-security.onrender.com';
 
-// The server sets a JS-readable `authed` hint cookie alongside the HttpOnly
-// session cookie. It carries no sensitive data — it only tells the SPA whether
-// a session *might* exist, so anonymous visitors skip the /auth/me probe.
-export const hasAuthHint = () => document.cookie.includes('authed=1');
+// ------------------------------------------------------------
+// Authentication hint
+// ------------------------------------------------------------
+
+export const hasAuthHint = () =>
+  document.cookie.includes('authed=1');
+
 export const clearAuthHint = () => {
   document.cookie = 'authed=; Max-Age=0; path=/';
 };
 
+// ------------------------------------------------------------
+// Date/time helpers
+// ------------------------------------------------------------
+
+export const formatDateTime = (value) => {
+  if (!value) return '—';
+
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
+};
+
+export const timeAgo = (value) => {
+  if (!value) return '—';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  const seconds = Math.floor(
+    (Date.now() - date.getTime()) / 1000
+  );
+
+  if (seconds < 10) return 'just now';
+  if (seconds < 60) return `${seconds}s ago`;
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+
+  const years = Math.floor(months / 12);
+  return `${years}y ago`;
+};
+
+// ------------------------------------------------------------
+// API request
+// ------------------------------------------------------------
+
 async function request(path, options = {}) {
-  const res = await fetch(`/api${path}`, {
+  const fetchOptions = {
     credentials: 'include',
-    headers: options.body ? { 'Content-Type': 'application/json' } : undefined,
     ...options,
-    body: options.body ? JSON.stringify(options.body) : undefined
-  });
+    headers: {
+      ...(options.body
+        ? { 'Content-Type': 'application/json' }
+        : {}),
+      ...(options.headers || {})
+    }
+  };
+
+  if (options.body !== undefined) {
+    fetchOptions.body =
+      typeof options.body === 'string'
+        ? options.body
+        : JSON.stringify(options.body);
+  }
+
+  const res = await fetch(
+    `${API_BASE_URL}/api${path}`,
+    fetchOptions
+  );
 
   let data = null;
   let rawText = '';
+
   try {
     rawText = await res.text();
-    data = JSON.parse(rawText);
+
+    if (rawText) {
+      data = JSON.parse(rawText);
+    }
   } catch {
-    /* non-JSON response (e.g. CSV, or plain-text rate-limit message) */
+    // Response was not JSON
   }
 
   if (!res.ok) {
-    // Session expired or was revoked elsewhere — drop the stale hint so the
-    // next page load doesn't probe again.
-    if (res.status === 401) clearAuthHint();
-    // Expired session while using a protected page → send the user to sign in
-    // instead of showing a confusing error.
-    if (res.status === 401 && data && data.message === 'You are not signed in. Please sign in again.' && !path.startsWith('/auth/')) {
+    if (res.status === 401) {
+      clearAuthHint();
+    }
+
+    if (
+      res.status === 401 &&
+      data &&
+      data.message ===
+        'You are not signed in. Please sign in again.' &&
+      !path.startsWith('/auth/')
+    ) {
       window.location.assign('/login');
     }
-    const fallback = rawText && rawText.length < 200 && !rawText.includes('<')
-      ? rawText
-      : `Request failed (${res.status})`;
-    const error = new Error((data && data.message) || fallback);
+
+    const fallback =
+      rawText &&
+      rawText.length < 200 &&
+      !rawText.includes('<')
+        ? rawText
+        : `Request failed (${res.status})`;
+
+    const error = new Error(
+      (data && data.message) || fallback
+    );
+
     error.status = res.status;
     error.data = data || {};
+
     throw error;
   }
+
   return data;
 }
 
+// ------------------------------------------------------------
+// API methods
+// ------------------------------------------------------------
+
 export const api = {
-  get: (path) => request(path),
-  post: (path, body) => request(path, { method: 'POST', body }),
-  patch: (path, body) => request(path, { method: 'PATCH', body }),
-  delete: (path) => request(path, { method: 'DELETE' })
+  get: (path) =>
+    request(path),
+
+  post: (path, body) =>
+    request(path, {
+      method: 'POST',
+      body
+    }),
+
+  patch: (path, body) =>
+    request(path, {
+      method: 'PATCH',
+      body
+    }),
+
+  delete: (path) =>
+    request(path, {
+      method: 'DELETE'
+    })
 };
 
-// CSV export needs a blob download instead of JSON.
-export async function downloadCsv(path, filename) {
-  const res = await fetch(`/api${path}`, { credentials: 'include' });
-  if (!res.ok) throw new Error('Export failed.');
+// ------------------------------------------------------------
+// CSV download
+// ------------------------------------------------------------
+
+export async function downloadCsv(
+  path,
+  filename = 'export.csv'
+) {
+  const res = await fetch(
+    `${API_BASE_URL}/api${path}`,
+    {
+      credentials: 'include'
+    }
+  );
+
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`;
+
+    try {
+      const data = await res.json();
+      message = data.message || message;
+    } catch {
+      // Ignore non-JSON error response
+    }
+
+    throw new Error(message);
+  }
+
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
   URL.revokeObjectURL(url);
-}
-
-export function formatDateTime(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  const today = new Date();
-  const sameDay = d.toDateString() === today.toDateString();
-  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (sameDay) return `Today, ${time}`;
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  if (d.toDateString() === yesterday.toDateString()) return `Yesterday, ${time}`;
-  return d.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' }) + `, ${time}`;
-}
-
-export function timeAgo(iso) {
-  if (!iso) return '—';
-  const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (seconds < 60) return 'just now';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
-  return `${Math.floor(seconds / 86400)} d ago`;
 }
