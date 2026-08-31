@@ -18,8 +18,8 @@ const authService = require('../services/authService');
 function sessionCookieOptions() {
   return {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: config.isProduction,
+    sameSite: 'none',
+    secure: true,
     path: '/',
     maxAge: config.session.maxLifetimeHours * 3_600_000
   };

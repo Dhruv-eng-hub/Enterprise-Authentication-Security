@@ -24,7 +24,7 @@ function requestMeta(req) {
 // The real session cookie stays HttpOnly.
 function setSessionCookie(res, token) {
   res.cookie(config.session.cookieName, token, sessionCookieOptions());
-  res.cookie('authed', '1', { sameSite: 'lax', secure: config.isProduction, path: '/' });
+  res.cookie('authed', '1', { sameSite: 'none', secure: true, path: '/' });
 }
 
 function clearSessionCookies(res) {
