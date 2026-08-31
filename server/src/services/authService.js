@@ -98,23 +98,47 @@ async function register({ name, email, password }) {
 // ================================================================ email verification
 
 async function issueEmailVerification(user) {
-  // Invalidate previous unused tokens, then issue a fresh one (hashed at rest).
-  db.prepare('DELETE FROM email_verification_tokens WHERE user_id = ? AND used_at IS NULL').run(user.id);
+  db.prepare(
+    'DELETE FROM email_verification_tokens WHERE user_id = ? AND used_at IS NULL'
+  ).run(user.id);
+
   const token = randomToken(32);
-  db.prepare('INSERT INTO email_verification_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)')
-    .run(user.id, sha256(token), minutesFromNow(config.tokens.emailVerificationTtlMinutes));
+
+  db.prepare(
+    'INSERT INTO email_verification_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)'
+  ).run(
+    user.id,
+    sha256(token),
+    minutesFromNow(config.tokens.emailVerificationTtlMinutes)
+  );
 
   const url = `${config.appUrl}/verify-email?token=${token}`;
-  try {
-    await emailService.verificationEmail({ to: user.email, name: user.name, url });
-  } catch {
-    // Delivery failure should not block registration; user can resend.
-  }
-  securityService.audit(user.id, user.email, 'VERIFICATION_EMAIL_SENT', null);
-  // In development (no SMTP) expose the link so the flow stays testable.
-  return !config.smtp.host && !config.isProduction ? { devEmailUrl: url } : {};
-}
 
+  try {
+    await emailService.verificationEmail({
+      to: user.email,
+      name: user.name,
+      url
+    });
+  } catch {
+    // Delivery failure should not block registration.
+  }
+
+  securityService.audit(
+    user.id,
+    user.email,
+    'VERIFICATION_EMAIL_SENT',
+    null
+  );
+
+  // Show the verification link whenever SMTP is not configured.
+  if (!config.smtp.host) {
+    logger.info(`[verification-link] ${url}`);
+    return { devEmailUrl: url };
+  }
+
+  return {};
+}
 async function verifyEmail(token) {
   const row = db.prepare('SELECT * FROM email_verification_tokens WHERE token_hash = ?').get(sha256(String(token || '')));
   if (!row) throw apiError(400, 'This verification link is invalid. Please request a new one.');
